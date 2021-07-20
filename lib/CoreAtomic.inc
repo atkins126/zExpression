@@ -65,26 +65,23 @@ end;
 constructor TCritical.Create;
 begin
   inherited Create;
-  LNum := TAtomInt.Create(0);
+  LNum := 0;
 end;
 
 destructor TCritical.Destroy;
 begin
-  LNum.Free;
   inherited Destroy;
 end;
 
 procedure TCritical.Acquire;
 begin
-  Inc(LNum.LockP^);
-  LNum.UnLock;
   inherited Acquire;
+  Inc(LNum);
 end;
 
 procedure TCritical.Release;
 begin
-  Dec(LNum.LockP^);
-  LNum.UnLock;
+  Dec(LNum);
   inherited Release;
 end;
 
@@ -98,9 +95,19 @@ begin
   Release();
 end;
 
+procedure TCritical.Lock;
+begin
+  Acquire();
+end;
+
+procedure TCritical.UnLock;
+begin
+  Release();
+end;
+
 function TCritical.IsBusy: Boolean;
 begin
-  Result := LNum.V > 0;
+  Result := LNum > 0;
 end;
 
 type

@@ -291,7 +291,7 @@ type
   TTextParsingClass = class of TTextParsing;
 
 const
-  C_SpacerSymbol = #44#46#43#45#42#47#40#41#59#58#61#35#64#94#38#37#33#34#91#93#60#62#63#123#125#39#36#124;
+  C_SpacerSymbol = #44#43#45#42#47#40#41#59#58#61#35#64#94#38#37#33#34#91#93#60#62#63#123#125#39#36#124;
 
 var
   SpacerSymbol: TAtomString;
@@ -365,7 +365,7 @@ begin
   if (TextStyle <> tsText) and (ComparePosStr(Result, '//')) then
     begin
       inc(Result, 2);
-      while ParsingData.Text[Result] <> #10 do
+      while not CharIn(ParsingData.Text[Result], [#13, #10]) do
         begin
           if Result + 1 > L then
               Break;
@@ -375,7 +375,7 @@ begin
   else if (TextStyle = tsC) and (ComparePosStr(Result, '#')) then
     begin
       inc(Result, 1);
-      while ParsingData.Text[Result] <> #10 do
+      while not CharIn(ParsingData.Text[Result], [#13, #10]) do
         begin
           if Result + 1 > L then
               Break;
@@ -893,9 +893,10 @@ var
   L: Integer;
   cPos, bkPos: Integer;
   NC: Integer;
-  dotCount: Integer;
-  eCnt: Integer;
-  AddSubSymCnt: Integer;
+  dotNum: Integer;
+  eNum: Integer;
+  eSymNum: Integer;
+  pSym: Integer;
   p: PTokenData;
 begin
   if not RebuildCacheBusy then
@@ -974,7 +975,7 @@ begin
           inc(cPos);
         end;
 
-      Result := NC > 0;
+      Result := (NC > 0);
       NumberBegin := bkPos;
       exit;
     end;
@@ -984,6 +985,9 @@ begin
     begin
       bkPos := cPos;
       NC := 0;
+      dotNum := 0;
+      eNum := 0;
+      eSymNum := 0;
       while True do
         begin
           cPos := GetTextDeclEndPos(GetCommentEndPos(cPos));
@@ -992,7 +996,23 @@ begin
               Break;
           c := ParsingData.Text[cPos];
 
-          if isWordSplitChar(c, True, SymbolTable) then
+          if CharIn(c, '.') then
+            begin
+              inc(dotNum);
+              if dotNum > 1 then
+                  Break;
+            end
+          else if CharIn(c, c0to9) then
+              inc(NC)
+          else if (NC > 0) and (eNum = 0) and CharIn(c, 'eE') then
+            begin
+              inc(eNum);
+            end
+          else if (NC > 0) and (eNum = 1) and CharIn(c, '-+') then
+            begin
+              inc(eSymNum);
+            end
+          else if isWordSplitChar(c, True, SymbolTable) then
             begin
               Break;
             end
@@ -1000,14 +1020,12 @@ begin
             begin
               Result := False;
               exit;
-            end
-          else if CharIn(c, c0to9) then
-              inc(NC);
+            end;
 
           inc(cPos);
         end;
 
-      Result := NC > 0;
+      Result := (NC > 0) and (dotNum <= 1);
       NumberBegin := bkPos;
       exit;
     end
@@ -1015,6 +1033,10 @@ begin
     begin
       bkPos := cPos;
       NC := 0;
+      dotNum := 0;
+      eNum := 0;
+      eSymNum := 0;
+      pSym := 0;
       while True do
         begin
           cPos := GetTextDeclEndPos(GetCommentEndPos(cPos));
@@ -1023,10 +1045,25 @@ begin
               Break;
           c := ParsingData.Text[cPos];
 
-          if CharIn(c, '+-') then
+          if (NC = 0) and (eSymNum = 0) and (eNum = 0) and CharIn(c, '-+') then
             begin
-              if NC > 0 then
+              inc(pSym);
+            end
+          else if CharIn(c, '.') then
+            begin
+              inc(dotNum);
+              if dotNum > 1 then
                   Break;
+            end
+          else if CharIn(c, c0to9) then
+              inc(NC)
+          else if (NC > 0) and (eNum = 0) and CharIn(c, 'eE') then
+            begin
+              inc(eNum);
+            end
+          else if (NC > 0) and (eNum = 1) and CharIn(c, '-+') then
+            begin
+              inc(eSymNum);
             end
           else if isWordSplitChar(c, True, SymbolTable) then
             begin
@@ -1036,14 +1073,12 @@ begin
             begin
               Result := False;
               exit;
-            end
-          else if CharIn(c, c0to9) then
-              inc(NC);
+            end;
 
           inc(cPos);
         end;
 
-      Result := NC > 0;
+      Result := (NC > 0) and (dotNum <= 1);
       NumberBegin := bkPos;
       exit;
     end;
@@ -1056,8 +1091,8 @@ var
   cPos: Integer;
   c: SystemChar;
   NC: Integer;
-  dotC: Integer;
-  eC: Integer;
+  dotNum: Integer;
+  eNum: Integer;
   p: PTokenData;
 begin
   if not RebuildCacheBusy then
@@ -1083,8 +1118,8 @@ begin
   if isNumber(cPos, Result, IsHex) then
     begin
       NC := 0;
-      dotC := 0;
-      eC := 0;
+      dotNum := 0;
+      eNum := 0;
       while True do
         begin
           if isComment(Result) or isTextDecl(Result) then
@@ -1097,23 +1132,23 @@ begin
                 begin
                   if NC > 0 then
                     begin
-                      if eC = 1 then
-                          inc(eC)
+                      if eNum = 1 then
+                          inc(eNum)
                       else
                           exit;
                     end;
                 end
               else if (not IsHex) and CharIn(c, '.') then
                 begin
-                  if (dotC > 1) then
+                  if (dotNum > 1) then
                       exit;
-                  inc(dotC);
+                  inc(dotNum);
                 end
               else if (not IsHex) and CharIn(c, 'eE') then
                 begin
-                  if (eC > 1) then
+                  if (eNum > 1) then
                       exit;
-                  inc(eC);
+                  inc(eNum);
                 end
               else if (IsHex and (CharIn(c, [cLoAtoF, cHiAtoF]))) then
                   inc(NC)
@@ -3099,17 +3134,23 @@ begin
       Result.DeleteFirst;
       Result.DeleteFirst;
       Result.DeleteFirst;
+      while CharIn(Result.Last, [#13, #10]) do
+          Result.DeleteLast;
     end
   else if umlMultipleMatch(False, '///*', Result) then
     begin
       Result.DeleteFirst;
       Result.DeleteFirst;
       Result.DeleteFirst;
+      while CharIn(Result.Last, [#13, #10]) do
+          Result.DeleteLast;
     end
   else if umlMultipleMatch(False, '//*', Result) then
     begin
       Result.DeleteFirst;
       Result.DeleteFirst;
+      while CharIn(Result.Last, [#13, #10]) do
+          Result.DeleteLast;
     end;
 end;
 
